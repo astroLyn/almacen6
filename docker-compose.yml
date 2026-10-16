@@ -1,0 +1,43 @@
+services:
+  # Base de Datos
+  mysql:
+    image: mysql:8.0
+    container_name: mysql_almacen
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: almacennetcommtel
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./database:/docker-entrypoint-initdb.d
+      - ./mysql_data:/var/lib/mysql
+
+  # Backend (API)
+  backend:
+    build: ./backend
+    container_name: api_almacen
+    depends_on:
+      - mysql
+    ports:
+      - "3000:3000"
+    environment:
+      - DB_HOST=mysql
+      - DB_USER=root
+      - DB_PASS=rootpassword
+      - DB_NAME=almacennetcommtel
+      - DB_PORT=3306
+      - PORT=3000
+      - JWT_SECRET=Tij_Netcommtel_Secure_Key_2026_@#$!
+
+  # Frontend (Nginx Proxy)
+  frontend:
+    build: 
+      context: ./frontend
+      args:
+        - REACT_APP_API_URL=/api
+    container_name: web_almacen
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
