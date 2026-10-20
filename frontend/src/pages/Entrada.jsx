@@ -21,11 +21,9 @@ import {
   Modal,
   Badge,
   Select,
-  Spin,
   Tooltip
 } from "antd";
 import {
-  SearchOutlined,
   PlusOutlined,
   DeleteOutlined,
   ShoppingCartOutlined,
@@ -33,13 +31,13 @@ import {
   CheckCircleOutlined,
   ClockCircleOutlined,
   CloseCircleOutlined,
-  UserOutlined,
-  FilterOutlined
+  UserOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 
 const { Title, Text } = Typography;
 const { Option } = Select;
+const { Search } = Input;
 
 export default function EntradaMaterial() {
   const { user } = useAuth();
@@ -53,10 +51,10 @@ export default function EntradaMaterial() {
   const [loadingEntradas, setLoadingEntradas] = useState(false);
   const [alertarEntrada, setAlertarEntrada] = useState(false);
 
-  // 🌟 NUEVO: Estado para el Modal de confirmación personalizado
   const [modalConfirmacionVisible, setModalConfirmacionVisible] = useState(false);
 
-  // 🔍 Estados para el buscador inteligente y FILTROS AVANZADOS
+  // 🔍 NUEVO: Estado de texto de búsqueda en tiempo real
+  const [textoBusqueda, setTextoBusqueda] = useState("");
   const [opcionesMateriales, setOpcionesMateriales] = useState([]);
   const [buscandoMateriales, setBuscandoMateriales] = useState(false);
   const [filtroUbicacion, setFiltroUbicacion] = useState(null);
@@ -76,7 +74,7 @@ export default function EntradaMaterial() {
   
   const [categorias, setCategorias] = useState([]);
   const [ubicaciones, setUbicaciones] = useState([]);
-  const [marcas, setMarcas] = useState([]);
+  const [marcas, setMarcas] = useState([]); 
   const [clientes, setClientes] = useState([]);
   const [proveedores, setProveedores] = useState([]);
   
@@ -85,13 +83,11 @@ export default function EntradaMaterial() {
   const [cargandoClientes, setCargandoClientes] = useState(false);
   const [cargandoProveedores, setCargandoProveedores] = useState(false);
 
-  // 📦 Cargar datos iniciales
   useEffect(() => {
     const fetchData = async () => {
       try {
         setCargandoClientes(true);
         setCargandoProveedores(true);
-
         const [clientesRes, proveedoresRes, categoriasRes, ubicacionesRes, marcasRes] = await Promise.all([
           api.get("/clientes"),
           api.get("/proveedores"),
@@ -99,7 +95,6 @@ export default function EntradaMaterial() {
           api.get("/ubicaciones"),
           api.get("/marcas") 
         ]);
-
         setClientes(clientesRes.data);
         setProveedores(proveedoresRes.data);
         setCategorias(categoriasRes.data);
@@ -113,9 +108,38 @@ export default function EntradaMaterial() {
         setCargandoProveedores(false);
       }
     };
-
     fetchData();
   }, []);
+
+  // 🌟 MAGIA EN TIEMPO REAL: Se dispara cada que cambias un filtro o escribes algo
+  useEffect(() => {
+    const buscarMaterialesDisponibles = async () => {
+      setBuscandoMateriales(true);
+      try {
+        // Usamos tu ruta general de materiales que ya acepta los 4 filtros
+        const { data } = await api.get("/materiales", {
+          params: {
+            descripcion: textoBusqueda || null,
+            ubicacion: filtroUbicacion || null,
+            marca: filtroMarca || null
+          }
+        });
+        // Filtramos para que solo aparezcan los activos en la tabla
+        setOpcionesMateriales(data.filter(m => m.estado === 'ACT'));
+      } catch (error) {
+        console.error("Error buscando materiales:", error);
+      } finally {
+        setBuscandoMateriales(false);
+      }
+    };
+
+    // Le ponemos un pequeño retraso de 300ms al texto para no saturar el servidor al teclear rápido
+    const timer = setTimeout(() => {
+      buscarMaterialesDisponibles();
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [textoBusqueda, filtroUbicacion, filtroMarca]);
 
   const agregarNuevoCliente = async () => {
     if (!nuevoCliente.trim()) {
@@ -217,44 +241,14 @@ export default function EntradaMaterial() {
     setModalRechazoVisible(true);
   };
 
-  // 🔍 BUSCADOR INTELIGENTE ACTUALIZADO
-  const handleBuscarMateriales = async (value) => {
-    if (!value || value.length < 2) {
-      setOpcionesMateriales([]);
-      return;
-    }
-
-    setBuscandoMateriales(true);
-    try {
-      let url = `/entradas/materiales/buscar?search=${value}`;
-      if (filtroUbicacion) url += `&ubicacion=${filtroUbicacion}`;
-      if (filtroMarca) url += `&marca=${filtroMarca}`;
-
-      const { data } = await api.get(url);
-      setOpcionesMateriales(data);
-    } catch (error) {
-      console.error("Error buscando materiales:", error);
-    } finally {
-      setBuscandoMateriales(false);
-    }
-  };
-
-  const handleSeleccionarMaterial = (codigoSeleccionado) => {
-    const materialObj = opcionesMateriales.find(m => m.codigoMaterial === codigoSeleccionado);
-    if (materialObj) {
-      setMaterialSeleccionado(materialObj);
-      setOpcionesMateriales([]);
-    }
-  };
-
   const agregarMaterial = () => {
-    if (!materialSeleccionado || !cantidad) {
-      message.warning("Seleccione un material e ingrese la cantidad");
+    if (!materialSeleccionado || !cantidad || Number(cantidad) <= 0) {
+      message.warning("Seleccione un material e ingrese una cantidad válida mayor a 0");
       return;
     }
     const existe = materiales.find((m) => m.codigoMaterial === materialSeleccionado.codigoMaterial);
     if (existe) {
-      message.warning("Este material ya fue agregado");
+      message.warning("Este material ya fue agregado a la lista");
       return;
     }
     setMateriales([
@@ -265,33 +259,28 @@ export default function EntradaMaterial() {
         key: materialSeleccionado.codigoMaterial
       },
     ]);
-    message.success("Material agregado a la lista");
+    message.success("Material preparado para ingreso");
     setCantidad("");
     setMaterialSeleccionado(null);
   };
 
   const eliminarMaterial = (codigo) => {
     setMateriales(materiales.filter((m) => m.codigoMaterial !== codigo));
-    message.success("Material removido");
+    message.success("Material removido de la lista");
   };
 
-  // 🛡️ CONFIRMACIÓN Y VALIDACIÓN (MODIFICADA - Usa Modal controlado por estado)
   const confirmarRegistro = () => {
     if (materiales.length === 0) {
       message.warning("No hay materiales en la lista para registrar.");
       return;
     }
-
     if (!OS || !fecha || !proveedor) {
       message.error("Faltan datos obligatorios: Asegúrate de llenar N° OS, Fecha y Proveedor.");
       return;
     }
-
-    // En lugar de Modal.confirm(), encendemos el interruptor del Modal real
     setModalConfirmacionVisible(true);
   };
 
-  // 📦 ENVÍO AL BACKEND
   const registrarEntrada = async () => {
     const payload = {
       OS,
@@ -304,8 +293,6 @@ export default function EntradaMaterial() {
         cantidad: m.cantidad,
       })),
     };
-
-    console.log("📦 Payload listo para enviarse:", payload);
 
     try {
       setLoading(true);
@@ -333,22 +320,30 @@ export default function EntradaMaterial() {
     setCliente("");
     setMateriales([]);
     setMaterialSeleccionado(null);
-    setOpcionesMateriales([]);
     setCantidad("");
     setAlertarEntrada(false);
+    setTextoBusqueda("");
     setFiltroUbicacion(null);
     setFiltroMarca(null);
   };
 
-  const limpiarBusqueda = () => {
-    setMaterialSeleccionado(null);
-    setOpcionesMateriales([]);
-    setCantidad("");
-    setFiltroUbicacion(null);
-    setFiltroMarca(null);
-  };
+  // 🌟 COLUMNAS PARA LA NUEVA MINI-TABLA BÚSQUEDA
+  const columnasBusqueda = [
+    { title: "Código", dataIndex: "codigoMaterial", key: "codigo", width: 100 },
+    { title: "Descripción", dataIndex: "descripcion", key: "desc", ellipsis: true },
+    { title: "Stock", dataIndex: "stockActual", key: "stock", width: 70, render: (s) => <Text strong>{s}</Text> },
+    { 
+      title: "", 
+      key: "accion", 
+      width: 100, 
+      render: (_, record) => (
+        <Button size="small" type="primary" onClick={() => setMaterialSeleccionado(record)}>
+          Seleccionar
+        </Button>
+      )
+    }
+  ];
 
-  // Columnas...
   const columnasEntradas = [
     { title: "N° Entrada", dataIndex: "noEntrada", key: "noEntrada", width: 100 },
     { title: "OS", dataIndex: "OS", key: "OS", width: 120 },
@@ -389,18 +384,10 @@ export default function EntradaMaterial() {
     { title: "Código", dataIndex: "codigoMaterial", key: "codigoMaterial", width: 120, render: (text) => <Text strong>{text}</Text> },
     { title: "Descripción", dataIndex: "descripcion", key: "descripcion", ellipsis: true },
     {
-      title: "Categoría", dataIndex: "categoria", key: "categoria", width: 150,
-      render: (codigoCat) => {
-        const categoriaEncontrada = categorias.find(c => c.claveCategoria === codigoCat);
-        return categoriaEncontrada ? <Text>{categoriaEncontrada.nombre}</Text> : <Text type="secondary">{codigoCat || 'N/A'}</Text>;
-      }
-    },
-    { title: "Color", dataIndex: "color", key: "color", width: 100, render: (color) => color || <Text type="secondary">-</Text> },
-    {
       title: "Ubicación", dataIndex: "ubicacion", key: "ubicacion", width: 130,
       render: (codigoUbi) => {
-        const ubicacionEncontrada = ubicaciones.find(u => u.codigoUbicacion === codigoUbi);
-        return <Tag color="default" style={{ borderStyle: 'dashed' }}>{ubicacionEncontrada ? ubicacionEncontrada.nombre : (codigoUbi || 'N/A')}</Tag>;
+        const ubi = ubicaciones.find(u => u.codigoUbicacion === codigoUbi || u.nombre === codigoUbi);
+        return <Tag color="default" style={{ borderStyle: 'dashed' }}>{ubi ? (ubi.nombre || ubi.ubicacion) : (codigoUbi || 'N/A')}</Tag>;
       }
     },
     {
@@ -475,9 +462,8 @@ export default function EntradaMaterial() {
 
         <Row gutter={16}>
           <Col span={12}>
-            <Card title="Buscar Material" extra={materialSeleccionado && <Button type="text" onClick={limpiarBusqueda}>Limpiar</Button>}>
+            <Card title="Buscar Material" style={{ height: '100%' }}>
               
-              {/* 🌟 FILTROS AVANZADOS CON BOTÓN DE LIMPIAR */}
               <Row gutter={8} style={{ marginBottom: 12 }}>
                 <Col span={9}>
                   <Select
@@ -487,9 +473,10 @@ export default function EntradaMaterial() {
                     value={filtroUbicacion}
                     onChange={setFiltroUbicacion}
                   >
-                    {ubicaciones.map(u => {
-                      const textoUbicacion = u.nombre || u.descripcion || u.ubicacion || `ID: ${u.codigoUbicacion}`;
-                      return <Option key={u.codigoUbicacion} value={u.codigoUbicacion}>{textoUbicacion}</Option>;
+                    {ubicaciones.map((u, i) => {
+                      const valor = u.codigoUbicacion || u.codigo || u.id || u.clave || i;
+                      const texto = u.nombre || u.descripcion || u.ubicacion || `Ubicación ${valor}`;
+                      return <Option key={valor} value={valor}>{texto}</Option>;
                     })}
                   </Select>
                 </Col>
@@ -501,61 +488,47 @@ export default function EntradaMaterial() {
                     value={filtroMarca}
                     onChange={setFiltroMarca}
                   >
-                    {marcas.map(m => (
-                      <Option key={m.claveMarca || m.codigo} value={m.claveMarca || m.codigo}>{m.nombre}</Option>
-                    ))}
+                    {marcas.map((m, i) => {
+                      const valor = m.claveMarca || m.codigo || m.id || i;
+                      const texto = m.nombre || m.descripcion || m.marca || `Marca ${valor}`;
+                      return <Option key={valor} value={valor}>{texto}</Option>;
+                    })}
                   </Select>
                 </Col>
                 <Col span={6}>
                   <Button 
-                    onClick={() => { setFiltroUbicacion(null); setFiltroMarca(null); setOpcionesMateriales([]); }} 
+                    onClick={() => { setFiltroUbicacion(null); setFiltroMarca(null); setTextoBusqueda(""); }} 
                     style={{ width: '100%' }}
                   >
-                    Limpiar Filtros
+                    Limpiar
                   </Button>
                 </Col>
               </Row>
 
-              {/* BARRA DE BÚSQUEDA */}
-              <Select
-                showSearch
-                style={{ width: '100%' }}
-                size="large"
-                optionLabelProp="label"
-                placeholder="Escribe código o descripción para buscar..."
-                filterOption={false}
-                onSearch={handleBuscarMateriales}
-                onChange={handleSeleccionarMaterial}
-                notFoundContent={buscandoMateriales ? <Spin size="small" /> : "Escribe al menos 2 letras para buscar..."}
-                value={materialSeleccionado ? materialSeleccionado.codigoMaterial : undefined}
-              >
-                {opcionesMateriales.map((mat) => (
-                  <Option
-                    key={mat.codigoMaterial}
-                    value={mat.codigoMaterial}
-                    label={`${mat.codigoMaterial} - ${mat.descripcion}`}
-                  >
-                    <div style={{ padding: '4px 0' }}>
-                      <div>
-                        <Text strong style={{ fontSize: '15px' }}>{mat.codigoMaterial}</Text> - <Text>{mat.descripcion}</Text>
-                      </div>
-                      <div style={{ marginTop: '4px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        <Tag color="cyan" style={{ margin: 0 }}>Categoría: {mat.categoria || 'N/A'}</Tag>
-                        {mat.marca && <Tag color="blue" style={{ margin: 0 }}>Marca: {mat.marca}</Tag>}
-                        <Tag color="geekblue" style={{ margin: 0 }}>Ubicación: {mat.ubicacion || 'N/A'}</Tag>
-                        <Text type="secondary" style={{ fontSize: '12px', marginLeft: 'auto' }}>
-                          Stock Actual: <strong>{mat.stockActual}</strong>
-                        </Text>
-                      </div>
-                    </div>
-                  </Option>
-                ))}
-              </Select>
+              <Search
+                placeholder="Escribe código o descripción..."
+                allowClear
+                value={textoBusqueda}
+                onChange={(e) => setTextoBusqueda(e.target.value)}
+                style={{ width: '100%', marginBottom: 16 }}
+              />
+
+              {/* 🌟 AQUÍ ESTÁ LA NUEVA TABLA DE RESULTADOS */}
+              <Table 
+                dataSource={opcionesMateriales} 
+                columns={columnasBusqueda} 
+                rowKey="codigoMaterial"
+                size="small"
+                pagination={{ pageSize: 5 }}
+                loading={buscandoMateriales}
+                bordered
+              />
+
             </Card>
           </Col>
           <Col span={12}>
-            {materialSeleccionado && (
-              <Card title="Material Seleccionado" extra={<Button type="primary" icon={<PlusOutlined />} onClick={agregarMaterial} disabled={!cantidad} size="large">Agregar</Button>}>
+            {materialSeleccionado ? (
+              <Card title="Material Seleccionado" extra={<Button type="primary" icon={<PlusOutlined />} onClick={agregarMaterial} disabled={!cantidad} size="large">Agregar</Button>} style={{ height: '100%' }}>
                 <Text strong style={{ fontSize: '16px', display: 'block', marginBottom: 16 }}>{materialSeleccionado.codigoMaterial} - {materialSeleccionado.descripcion}</Text>
                 <Descriptions size="small" bordered column={2}>
                   <Descriptions.Item label="Stock Actual"><Statistic value={materialSeleccionado.stockActual} valueStyle={{ fontSize: '14px' }} /></Descriptions.Item>
@@ -564,8 +537,15 @@ export default function EntradaMaterial() {
                 </Descriptions>
                 <Divider />
                 <Form.Item label="Cantidad a Ingresar *" style={{ marginBottom: 0 }}>
-                  <Input type="number" placeholder="Ingresa la cantidad" value={cantidad} onChange={(e) => setCantidad(e.target.value)} size="large" style={{ width: '100%' }} />
+                  <Input type="number" placeholder="Ingresa la cantidad" value={cantidad} onChange={(e) => setCantidad(e.target.value)} size="large" style={{ width: '100%' }} onPressEnter={agregarMaterial} />
                 </Form.Item>
+              </Card>
+            ) : (
+              <Card style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fafafa' }}>
+                <div style={{ textAlign: 'center', color: '#bfbfbf' }}>
+                  <ShoppingCartOutlined style={{ fontSize: 48, marginBottom: 16 }} />
+                  <p>Selecciona un material de la tabla para agregarlo.</p>
+                </div>
               </Card>
             )}
           </Col>
@@ -577,7 +557,7 @@ export default function EntradaMaterial() {
               title={<Space><Text>Materiales a Ingresar</Text><Tag color="blue">{materiales.length} material(es)</Tag></Space>}
               extra={
                 <Space>
-                  <Button onClick={limpiarFormulario} danger size="large">Limpiar Todo</Button>
+                  <Button onClick={() => setMateriales([])} danger size="large">Vaciar Lista</Button>
                   <Button
                     type="primary"
                     onClick={confirmarRegistro}
@@ -601,7 +581,6 @@ export default function EntradaMaterial() {
         </Row>
       </Card>
 
-      {/* 🌟 NUEVO: Modal de Confirmación Personalizado */}
       <Modal
         title={
           <Space>
@@ -626,7 +605,6 @@ export default function EntradaMaterial() {
         </div>
       </Modal>
 
-      {/* Modales existentes */}
       <Modal
         title={<Space><ClockCircleOutlined /><span>Entradas por Aprobar</span><Tag color="orange">{entradasPendientes.length} pendientes</Tag></Space>}
         open={modalVisible}

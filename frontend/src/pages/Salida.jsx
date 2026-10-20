@@ -21,11 +21,9 @@ import {
   Modal,
   Badge,
   Select,
-  Spin,
   Tooltip
 } from "antd";
 import {
-  SearchOutlined,
   PlusOutlined,
   DeleteOutlined,
   ShoppingCartOutlined,
@@ -39,6 +37,7 @@ import dayjs from "dayjs";
 
 const { Title, Text } = Typography;
 const { Option } = Select;
+const { Search } = Input;
 
 export default function SalidaMaterial() {
   const { user } = useAuth(); 
@@ -54,6 +53,8 @@ export default function SalidaMaterial() {
 
   const [modalConfirmacionVisible, setModalConfirmacionVisible] = useState(false);
 
+  // 🔍 NUEVO: Estado de texto de búsqueda en tiempo real
+  const [textoBusqueda, setTextoBusqueda] = useState("");
   const [opcionesMateriales, setOpcionesMateriales] = useState([]);
   const [buscandoMateriales, setBuscandoMateriales] = useState(false);
   const [filtroUbicacion, setFiltroUbicacion] = useState(null);
@@ -105,6 +106,33 @@ export default function SalidaMaterial() {
     
     fetchData();
   }, []);
+
+  // 🌟 MAGIA EN TIEMPO REAL: Se dispara cada que cambias un filtro o escribes algo
+  useEffect(() => {
+    const buscarMaterialesDisponibles = async () => {
+      setBuscandoMateriales(true);
+      try {
+        const { data } = await api.get("/materiales", {
+          params: {
+            descripcion: textoBusqueda || null,
+            ubicacion: filtroUbicacion || null,
+            marca: filtroMarca || null
+          }
+        });
+        setOpcionesMateriales(data.filter(m => m.estado === 'ACT'));
+      } catch (error) {
+        console.error("Error buscando materiales:", error);
+      } finally {
+        setBuscandoMateriales(false);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      buscarMaterialesDisponibles();
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [textoBusqueda, filtroUbicacion, filtroMarca]);
 
   const agregarNuevoCliente = async () => {
     if (!nuevoCliente.trim()) {
@@ -192,48 +220,23 @@ export default function SalidaMaterial() {
     setSalidaARechazar(null);
   };
 
-  const handleBuscarMateriales = async (value) => {
-    if (!value || value.length < 2) {
-      setOpcionesMateriales([]);
-      return;
-    }
-    setBuscandoMateriales(true);
-    try {
-      let url = `/salidas/material/buscar?search=${value}`;
-      if (filtroUbicacion) url += `&ubicacion=${filtroUbicacion}`;
-      if (filtroMarca) url += `&marca=${filtroMarca}`;
-
-      const { data } = await api.get(url);
-      setOpcionesMateriales(data);
-    } catch (error) {
-      console.error("Error buscando materiales:", error);
-    } finally {
-      setBuscandoMateriales(false);
-    }
-  };
-
-  const handleSeleccionarMaterial = (codigoSeleccionado) => {
-    const materialObj = opcionesMateriales.find(m => m.codigoMaterial === codigoSeleccionado);
-    if (materialObj) {
-      setMaterialSeleccionado(materialObj);
-      setOpcionesMateriales([]); 
-    }
-  };
-
   const agregarMaterial = () => {
-    if (!materialSeleccionado || !cantidad) {
-      message.warning("Seleccione un material e ingrese la cantidad");
+    if (!materialSeleccionado || !cantidad || Number(cantidad) <= 0) {
+      message.warning("Seleccione un material e ingrese una cantidad válida mayor a 0");
       return;
     }
 
     const existe = materiales.find((m) => m.codigoMaterial === materialSeleccionado.codigoMaterial);
     if (existe) {
-      message.warning("Este material ya fue agregado");
+      message.warning("Este material ya fue agregado a la lista");
       return;
     }
 
-    if (parseFloat(cantidad) > materialSeleccionado.stockActual) {
-      message.error(`¡Alerta! Stock insuficiente. Solo hay ${materialSeleccionado.stockActual} unidades disponibles de este material.`);
+    const stockDisponible = parseFloat(materialSeleccionado.stockActual || 0);
+    const cantidadRequerida = parseFloat(cantidad);
+
+    if (cantidadRequerida > stockDisponible) {
+      message.error(`¡Alerta! Stock insuficiente. Solo hay ${stockDisponible} unidades disponibles.`);
       return; 
     }
 
@@ -241,42 +244,34 @@ export default function SalidaMaterial() {
       ...materiales,
       {
         ...materialSeleccionado,
-        cantidad: parseFloat(cantidad),
+        cantidad: cantidadRequerida,
         key: materialSeleccionado.codigoMaterial
       },
     ]);
 
-    message.success("Material agregado");
+    message.success("Material preparado para salida");
     setCantidad("");
     setMaterialSeleccionado(null);
   };
 
   const eliminarMaterial = (codigo) => {
     setMateriales(materiales.filter((m) => m.codigoMaterial !== codigo));
-    message.success("Material removido");
+    message.success("Material removido de la lista");
   };
 
-  // 🛡️ CONFIRMACIÓN Y VALIDACIÓN CON RASTREO
   const confirmarRegistro = () => {
-    console.log("🛠️ Intentando abrir modal. Materiales:", materiales.length, "Cotización:", cotizacion);
-
     if (materiales.length === 0) {
       message.warning("No hay materiales en la lista para registrar.");
       return;
     }
-
     if (!fecha || !cotizacion || cotizacion.trim() === "") {
       message.error("Faltan datos obligatorios: Asegúrate de llenar Fecha y Cotización.");
-      console.log("❌ Bloqueado: Faltan datos (Fecha o Cotización vacía)");
       return;
     }
-
-    console.log("✅ Datos correctos. Encendiendo estado del modal...");
     setModalConfirmacionVisible(true);
   };
 
   const registrarSalida = async () => {
-    console.log("🚀 Enviando datos al servidor...");
     if (!fecha || !cotizacion || materiales.length === 0) {
       message.warning("Faltan datos requeridos o no hay materiales agregados");
       return;
@@ -318,20 +313,29 @@ export default function SalidaMaterial() {
     setCliente("");
     setMateriales([]);
     setMaterialSeleccionado(null);
-    setOpcionesMateriales([]);
     setCantidad("");
     setAlertarSalida(false);
+    setTextoBusqueda("");
     setFiltroUbicacion(null);
     setFiltroMarca(null);
   };
 
-  const limpiarBusqueda = () => {
-    setMaterialSeleccionado(null);
-    setOpcionesMateriales([]);
-    setCantidad("");
-    setFiltroUbicacion(null);
-    setFiltroMarca(null);
-  };
+  // 🌟 COLUMNAS PARA LA NUEVA MINI-TABLA BÚSQUEDA
+  const columnasBusqueda = [
+    { title: "Código", dataIndex: "codigoMaterial", key: "codigo", width: 100 },
+    { title: "Descripción", dataIndex: "descripcion", key: "desc", ellipsis: true },
+    { title: "Stock", dataIndex: "stockActual", key: "stock", width: 70, render: (s) => <Text strong>{s}</Text> },
+    { 
+      title: "", 
+      key: "accion", 
+      width: 100, 
+      render: (_, record) => (
+        <Button size="small" type="primary" onClick={() => setMaterialSeleccionado(record)}>
+          Seleccionar
+        </Button>
+      )
+    }
+  ];
 
   const columnasSalidas = [
     { title: "N° Salida", dataIndex: "noSalida", key: "noSalida", width: 100 },
@@ -387,36 +391,15 @@ export default function SalidaMaterial() {
       ellipsis: true
     },
     { 
-      title: "Categoría", 
-      dataIndex: "categoria", 
-      key: "categoria",
-      width: 150,
-      render: (codigoCat) => {
-        const categoriaEncontrada = categorias.find(c => c.claveCategoria === codigoCat);
-        return categoriaEncontrada ? (
-          <Text>{categoriaEncontrada.nombre}</Text>
-        ) : (
-          <Text type="secondary">{codigoCat || 'N/A'}</Text>
-        );
-      }
-    },
-    { 
-      title: "Color", 
-      dataIndex: "color", 
-      key: "color",
-      width: 100,
-      render: (color) => color || <Text type="secondary">-</Text>
-    },
-    { 
       title: "Ubicación", 
       dataIndex: "ubicacion", 
       key: "ubicacion",
       width: 130,
       render: (codigoUbi) => {
-        const ubicacionEncontrada = ubicaciones.find(u => u.codigoUbicacion === codigoUbi);
+        const ubi = ubicaciones.find(u => u.codigoUbicacion === codigoUbi || u.nombre === codigoUbi);
         return (
           <Tag color="default" style={{ borderStyle: 'dashed' }}>
-            {ubicacionEncontrada ? ubicacionEncontrada.nombre : (codigoUbi || 'N/A')}
+            {ubi ? (ubi.nombre || ubi.ubicacion) : (codigoUbi || 'N/A')}
           </Tag>
         );
       }
@@ -509,7 +492,7 @@ export default function SalidaMaterial() {
 
         <Row gutter={16}>
           <Col span={12}>
-            <Card title="Buscar Material" extra={materialSeleccionado && <Button type="text" onClick={limpiarBusqueda}>Limpiar</Button>}>
+            <Card title="Buscar Material" style={{ height: '100%' }}>
               
               <Row gutter={8} style={{ marginBottom: 12 }}>
                 <Col span={9}>
@@ -521,9 +504,8 @@ export default function SalidaMaterial() {
                     onChange={setFiltroUbicacion}
                   >
                     {ubicaciones.map((u, i) => {
-                      const isObj = typeof u === 'object' && u !== null;
-                      const valor = isObj ? (u.codigoUbicacion || u.id || u.clave || i) : u;
-                      const texto = isObj ? (u.nombre || u.descripcion || u.ubicacion || `Ubicación ${valor}`) : u;
+                      const valor = u.codigoUbicacion || u.codigo || u.id || u.clave || i;
+                      const texto = u.nombre || u.descripcion || u.ubicacion || `Ubicación ${valor}`;
                       return <Option key={valor} value={valor}>{texto}</Option>;
                     })}
                   </Select>
@@ -537,68 +519,59 @@ export default function SalidaMaterial() {
                     onChange={setFiltroMarca}
                   >
                     {marcas.map((m, i) => {
-                      const isObj = typeof m === 'object' && m !== null;
-                      const valor = isObj ? (m.claveMarca || m.codigo || m.id || i) : m;
-                      const texto = isObj ? (m.nombre || m.descripcion || m.marca || `Marca ${valor}`) : m;
+                      const valor = m.claveMarca || m.codigo || m.id || i;
+                      const texto = m.nombre || m.descripcion || m.marca || `Marca ${valor}`;
                       return <Option key={valor} value={valor}>{texto}</Option>;
                     })}
                   </Select>
                 </Col>
                 <Col span={6}>
-                  <Button onClick={() => { setFiltroUbicacion(null); setFiltroMarca(null); setOpcionesMateriales([]); }} style={{ width: '100%' }}>Limpiar</Button>
+                  <Button onClick={() => { setFiltroUbicacion(null); setFiltroMarca(null); setTextoBusqueda(""); }} style={{ width: '100%' }}>Limpiar</Button>
                 </Col>
               </Row>
 
-              <Select
-                showSearch
-                style={{ width: '100%' }}
-                size="large"
-                optionLabelProp="label"
-                placeholder="Escribe el código o descripción..."
-                filterOption={false} 
-                onSearch={handleBuscarMateriales} 
-                onChange={handleSeleccionarMaterial} 
-                notFoundContent={buscandoMateriales ? <Spin size="small" /> : "Escribe al menos 2 letras..."}
-                value={materialSeleccionado ? materialSeleccionado.codigoMaterial : undefined}
-              >
-                {opcionesMateriales.map((mat) => (
-                  <Option 
-                    key={mat.codigoMaterial} 
-                    value={mat.codigoMaterial}
-                    label={`${mat.codigoMaterial} - ${mat.descripcion}`}
-                  >
-                    <div style={{ padding: '4px 0' }}>
-                      <div>
-                        <Text strong style={{ fontSize: '15px' }}>{mat.codigoMaterial}</Text> - <Text>{mat.descripcion}</Text>
-                      </div>
-                      <div style={{ marginTop: '4px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        <Tag color="cyan" style={{ margin: 0 }}>Categoría: {mat.categoria || 'N/A'}</Tag>
-                        {mat.marca && <Tag color="blue" style={{ margin: 0 }}>Marca: {mat.marca}</Tag>}
-                        <Tag color="geekblue" style={{ margin: 0 }}>Ubicación: {mat.ubicacion || 'N/A'}</Tag>
-                        <Text type="secondary" style={{ fontSize: '12px', marginLeft: 'auto' }}>
-                          Stock Actual: <strong>{mat.stockActual}</strong>
-                        </Text>
-                      </div>
-                    </div>
-                  </Option>
-                ))}
-              </Select>
+              <Search
+                placeholder="Escribe código o descripción..."
+                allowClear
+                value={textoBusqueda}
+                onChange={(e) => setTextoBusqueda(e.target.value)}
+                style={{ width: '100%', marginBottom: 16 }}
+              />
+
+              {/* 🌟 AQUÍ ESTÁ LA NUEVA TABLA DE RESULTADOS */}
+              <Table 
+                dataSource={opcionesMateriales} 
+                columns={columnasBusqueda} 
+                rowKey="codigoMaterial"
+                size="small"
+                pagination={{ pageSize: 5 }}
+                loading={buscandoMateriales}
+                bordered
+              />
+
             </Card>
           </Col>
 
           <Col span={12}>
-            {materialSeleccionado && (
-              <Card title="Material Seleccionado" extra={<Button type="primary" icon={<PlusOutlined />} onClick={agregarMaterial} disabled={!cantidad} size="large">Agregar</Button>}>
+            {materialSeleccionado ? (
+              <Card title="Material Seleccionado" extra={<Button type="primary" icon={<PlusOutlined />} onClick={agregarMaterial} disabled={!cantidad} size="large">Agregar</Button>} style={{ height: '100%' }}>
                 <div style={{ marginBottom: "16px" }}><Text strong style={{ fontSize: "16px" }}>{materialSeleccionado.codigoMaterial} - {materialSeleccionado.descripcion}</Text></div>
                 <Descriptions size="small" bordered column={2}>
-                  <Descriptions.Item label="Stock Actual"><Statistic value={materialSeleccionado.stockActual} valueStyle={{ fontSize: "14px" }} /></Descriptions.Item>
+                  <Descriptions.Item label="Stock Actual"><Statistic value={materialSeleccionado.stockActual} valueStyle={{ fontSize: "14px", color: materialSeleccionado.stockActual <= 0 ? 'red' : 'inherit' }} /></Descriptions.Item>
                   <Descriptions.Item label="Ubicación"><Tag color="blue"><strong>{materialSeleccionado.ubicacion}</strong></Tag></Descriptions.Item>
                   {materialSeleccionado.marca && <Descriptions.Item label="Marca"><Text>{materialSeleccionado.marca}</Text></Descriptions.Item>}
                 </Descriptions>
                 <Divider />
                 <Form.Item label="Cantidad a Retirar *" style={{ marginBottom: 0 }}>
-                  <Input type="number" placeholder="Ingresa la cantidad" value={cantidad} onChange={(e) => setCantidad(e.target.value)} size="large" />
+                  <Input type="number" placeholder="Ingresa la cantidad" value={cantidad} onChange={(e) => setCantidad(e.target.value)} size="large" onPressEnter={agregarMaterial} />
                 </Form.Item>
+              </Card>
+            ) : (
+              <Card style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fafafa' }}>
+                <div style={{ textAlign: 'center', color: '#bfbfbf' }}>
+                  <ShoppingCartOutlined style={{ fontSize: 48, marginBottom: 16 }} />
+                  <p>Selecciona un material de la tabla para agregarlo.</p>
+                </div>
               </Card>
             )}
           </Col>
@@ -608,7 +581,7 @@ export default function SalidaMaterial() {
           <Col span={24}>
             <Card title={<Space><Text>Materiales a Retirar</Text><Tag color="blue">{materiales.length} material(es)</Tag></Space>} extra={
                 <Space>
-                  <Button onClick={limpiarFormulario} danger size="large">Limpiar Todo</Button>
+                  <Button onClick={() => setMateriales([])} danger size="large">Vaciar Lista</Button>
                   <Button type="primary" onClick={confirmarRegistro} loading={loading} disabled={materiales.length === 0} size="large" icon={<ExclamationCircleOutlined />}>Registrar Salida</Button>
                 </Space>
               }>
