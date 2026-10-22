@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from "react";
-import { 
-  Layout, 
-  Card, 
-  Row, 
-  Col, 
-  Typography, 
-  Badge, 
-  Avatar, 
-  Spin, 
-  Alert, 
+import {
+  Layout,
+  Card,
+  Row,
+  Col,
+  Typography,
+  Badge,
+  Avatar,
+  Spin,
+  Alert,
   Table,
-  Tag 
+  Tag,
+  Grid,
+  Empty,
+  Progress,
 } from "antd";
 import {
   AppstoreOutlined,
@@ -22,32 +25,42 @@ import {
   CheckCircleOutlined,
   ClockCircleOutlined,
 } from "@ant-design/icons";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
-// 🔒 IMPORTANTE: Cambiamos axios genérico por tu configuración segura
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 import api from "../api/axiosConfig";
 
 const { Header, Content } = Layout;
 const { Title, Text } = Typography;
+const { useBreakpoint } = Grid;
 
-// Colores para los gráficos
-const COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#06B6D4", "#84CC16", "#F97316"];
-
-// Mapeo de días de la semana
-const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+const COLORS = [
+  "#3B82F6", "#10B981", "#F59E0B", "#EF4444",
+  "#8B5CF6", "#06B6D4", "#84CC16", "#F97316",
+];
+const DIAS_SEMANA = [
+  "Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado",
+];
 
 const Dashboard = () => {
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // 🔹 Obtener datos del dashboard usando la API segura
+  const screens = useBreakpoint();
+  const isMobile = !screens.md; // < 768px
+
   useEffect(() => {
     const obtenerDatosDashboard = async () => {
       try {
         setLoading(true);
-        // 🔒 Usamos "api.get" y quitamos el localhost directo
         const response = await api.get("/dashboard");
-        console.log("📊 Datos del dashboard:", response.data);
         setDashboardData(response.data);
       } catch (err) {
         console.error("❌ Error al obtener datos del dashboard:", err);
@@ -56,39 +69,34 @@ const Dashboard = () => {
         setLoading(false);
       }
     };
-
     obtenerDatosDashboard();
   }, []);
 
-  // 🔹 Formatear datos para gráfico de barras (movimientos semanales)
   const formatearMovimientosSemanales = (movimientos) => {
     if (!movimientos || !Array.isArray(movimientos)) return [];
-    
-    return movimientos.map(item => ({
-      name: DIAS_SEMANA[new Date(item.dia).getDay()] || 'Sin nombre',
+    return movimientos.map((item) => ({
+      name: DIAS_SEMANA[new Date(item.dia).getDay()] || "Sin nombre",
       Entradas: parseInt(item.entradas) || 0,
       Salidas: parseInt(item.salidas) || 0,
-      fechaOriginal: item.dia
+      fechaOriginal: item.dia,
     }));
   };
 
-  // 🔹 Formatear datos para tabla de stock por categoría
   const formatearStockTabla = (stockData) => {
     if (!stockData || !Array.isArray(stockData)) return [];
-    
-    // Calcular el total para los porcentajes
-    const totalStock = stockData.reduce((sum, item) => sum + parseFloat(item.stock || 0), 0);
-    
+    const totalStock = stockData.reduce(
+      (sum, item) => sum + parseFloat(item.stock || 0),
+      0
+    );
     return stockData.map((item, index) => {
       const cantidad = parseFloat(item.stock || 0);
       const porcentaje = totalStock > 0 ? (cantidad / totalStock) * 100 : 0;
-      
       return {
         key: index,
-        categoria: item.categoria || 'Sin categoría',
-        cantidad: cantidad,
-        porcentaje: porcentaje,
-        color: COLORS[index % COLORS.length]
+        categoria: item.categoria || "Sin categoría",
+        cantidad,
+        porcentaje,
+        color: COLORS[index % COLORS.length],
       };
     });
   };
@@ -96,7 +104,13 @@ const Dashboard = () => {
   if (loading) {
     return (
       <Layout style={{ minHeight: "100vh" }}>
-        <Content style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
+        <Content
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
           <Spin size="large" tip="Cargando dashboard..." />
         </Content>
       </Layout>
@@ -106,7 +120,7 @@ const Dashboard = () => {
   if (error) {
     return (
       <Layout style={{ minHeight: "100vh" }}>
-        <Content style={{ margin: "20px" }}>
+        <Content style={{ margin: isMobile ? "56px 10px 20px" : "20px" }}>
           <Alert message={error} type="error" showIcon />
         </Content>
       </Layout>
@@ -120,28 +134,33 @@ const Dashboard = () => {
     movimientosHoy = {},
     movimientosSemanales = [],
     stockPorCategoria = [],
-    totalMovimientosHoy = {}
   } = dashboardData || {};
 
-  // Datos formateados
-  const datosMovimientosSemanales = formatearMovimientosSemanales(movimientosSemanales);
+  const datosMovimientosSemanales =
+    formatearMovimientosSemanales(movimientosSemanales);
   const datosStockTabla = formatearStockTabla(stockPorCategoria);
+  const totalCantidad = datosStockTabla.reduce(
+    (sum, item) => sum + item.cantidad,
+    0
+  );
 
-  // Columnas para la tabla de stock por categoría
+  // 🖥️ Columnas de la tabla (solo Desktop)
   const columnasStock = [
     {
-      title: 'Categoría',
-      dataIndex: 'categoria',
-      key: 'categoria',
+      title: "Categoría",
+      dataIndex: "categoria",
+      key: "categoria",
+      fixed: "left",
+      width: 120,
       render: (text, record) => (
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-          <div 
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <div
             style={{
               width: 12,
               height: 12,
               backgroundColor: record.color,
-              borderRadius: '50%',
-              marginRight: 8
+              borderRadius: "50%",
+              marginRight: 8,
             }}
           />
           {text}
@@ -149,351 +168,422 @@ const Dashboard = () => {
       ),
     },
     {
-      title: 'Cantidad',
-      dataIndex: 'cantidad',
-      key: 'cantidad',
+      title: "Cantidad",
+      dataIndex: "cantidad",
+      key: "cantidad",
+      width: 120,
       render: (cantidad) => (
         <Text strong>{cantidad.toLocaleString()} unidades</Text>
       ),
       sorter: (a, b) => a.cantidad - b.cantidad,
     },
     {
-      title: 'Porcentaje',
-      dataIndex: 'porcentaje',
-      key: 'porcentaje',
+      title: "Porcentaje",
+      dataIndex: "porcentaje",
+      key: "porcentaje",
+      width: 100,
       render: (porcentaje) => (
-        <Tag color={porcentaje > 20 ? "green" : porcentaje > 10 ? "orange" : "red"}>
-          {porcentaje ? `${porcentaje.toFixed(1)}%` : '0%'}
+        <Tag
+          color={
+            porcentaje > 20 ? "green" : porcentaje > 10 ? "orange" : "red"
+          }
+        >
+          {porcentaje ? `${porcentaje.toFixed(1)}%` : "0%"}
         </Tag>
       ),
       sorter: (a, b) => a.porcentaje - b.porcentaje,
     },
     {
-      title: 'Distribución',
-      key: 'distribucion',
+      title: "Distribución",
+      key: "distribucion",
+      width: 150,
       render: (_, record) => (
-        <div style={{ width: '100%', backgroundColor: '#f0f0f0', borderRadius: 4 }}>
-          <div 
-            style={{ 
-              width: `${Math.min(record.porcentaje, 100)}%`, 
-              height: 8, 
+        <div
+          style={{ width: "100%", backgroundColor: "#f0f0f0", borderRadius: 4 }}
+        >
+          <div
+            style={{
+              width: `${Math.min(record.porcentaje, 100)}%`,
+              height: 8,
               backgroundColor: record.color,
-              borderRadius: 4
-            }} 
+              borderRadius: 4,
+            }}
           />
         </div>
       ),
     },
   ];
 
+  // 🔢 StatCard reutilizable (compacta en móvil)
+  const StatCard = ({ icon, color, label, value, extra }) => (
+    <Card
+      size="small"
+      style={{ height: "100%" }}
+      styles={{ body: { padding: isMobile ? 10 : 16 } }}
+    >
+      <Row align="middle" gutter={isMobile ? 6 : 8} wrap={false}>
+        <Col flex="none">
+          <span style={{ fontSize: isMobile ? 18 : 24, color, display: "flex" }}>
+            {icon}
+          </span>
+        </Col>
+        <Col flex="auto" style={{ minWidth: 0 }}>
+          <Text
+            strong
+            ellipsis
+            style={{ display: "block", fontSize: isMobile ? 10 : 12 }}
+            title={label}
+          >
+            {label}
+          </Text>
+          <Title
+            level={3}
+            style={{
+              margin: "2px 0",
+              fontSize: isMobile ? 17 : 20,
+              color: ["#EF4444", "#F59E0B", "#8B5CF6"].includes(color)
+                ? color
+                : undefined,
+            }}
+          >
+            {value}
+          </Title>
+          {extra && (
+            <Text
+              type="secondary"
+              style={{ fontSize: isMobile ? 9 : 11, display: "block" }}
+              ellipsis
+              title={typeof extra === "string" ? extra : undefined}
+            >
+              {extra}
+            </Text>
+          )}
+        </Col>
+      </Row>
+    </Card>
+  );
+
+  // 📱 Render móvil de la distribución de stock (cards + progress)
+  const renderStockMobile = () => {
+    if (!datosStockTabla.length) {
+      return <Empty description="No hay datos de stock" />;
+    }
+    return (
+      <div>
+        {datosStockTabla.map((item) => (
+          <div
+            key={item.key}
+            style={{
+              padding: "10px 0",
+              borderBottom: "1px solid #f0f0f0",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 4,
+                gap: 8,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  minWidth: 0,
+                  flex: 1,
+                }}
+              >
+                <div
+                  style={{
+                    width: 10,
+                    height: 10,
+                    backgroundColor: item.color,
+                    borderRadius: "50%",
+                    flexShrink: 0,
+                  }}
+                />
+                <Text
+                  strong
+                  ellipsis
+                  style={{ fontSize: 13 }}
+                  title={item.categoria}
+                >
+                  {item.categoria}
+                </Text>
+              </div>
+              <Tag
+                color={
+                  item.porcentaje > 20
+                    ? "green"
+                    : item.porcentaje > 10
+                    ? "orange"
+                    : "red"
+                }
+                style={{ margin: 0, flexShrink: 0 }}
+              >
+                {item.porcentaje ? `${item.porcentaje.toFixed(1)}%` : "0%"}
+              </Tag>
+            </div>
+            <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>
+              {item.cantidad.toLocaleString()} unidades
+            </div>
+            <Progress
+              percent={Math.min(item.porcentaje, 100)}
+              showInfo={false}
+              strokeColor={item.color}
+              size="small"
+            />
+          </div>
+        ))}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            paddingTop: 12,
+            fontSize: 13,
+          }}
+        >
+          <Text strong>Total</Text>
+          <Text strong>
+            {totalCantidad.toLocaleString()} uds · 100%
+          </Text>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Layout style={{ minHeight: "100vh" }}>
-      {/* Main Content */}
       <Layout>
+        {/* 📱 paddingLeft en móvil deja espacio al botón hamburguesa flotante del sidebar */}
         <Header
           style={{
             background: "#fff",
-            padding: "16px 24px",
+            padding: isMobile ? "12px 16px 12px 56px" : "16px 24px",
             borderBottom: "1px solid #f0f0f0",
+            height: "auto",
+            lineHeight: "normal",
           }}
         >
-          <Row align="middle" justify="space-between">
-            <Col>
-              <Title level={3} style={{ margin: 0 }}>
+          <Row align="middle" justify="space-between" gutter={8}>
+            <Col flex="auto" style={{ minWidth: 0 }}>
+              <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>
                 Dashboard
               </Title>
-              <Text type="secondary">Resumen general del almacén</Text>
+              <Text
+                type="secondary"
+                style={{ fontSize: isMobile ? "12px" : "14px" }}
+              >
+                Resumen general del almacén
+              </Text>
             </Col>
-            <Col>
+            <Col flex="none">
               <Badge count={alertas.alertasActivas || 0}>
-                <Avatar 
-                  icon={<ExclamationCircleOutlined />} 
-                  style={{ backgroundColor: '#ff4d4f' }} 
+                <Avatar
+                  icon={<ExclamationCircleOutlined />}
+                  style={{ backgroundColor: "#ff4d4f" }}
                 />
               </Badge>
             </Col>
           </Row>
         </Header>
 
-        <Content style={{ margin: "20px", padding: "0 10px" }}>
-          {/* Cards principales */}
-          <Row gutter={[16, 16]}>
-            {/* Total Materiales */}
-            <Col xs={24} sm={12} md={8} lg={4}>
-              <Card 
-                size="small"
-                style={{ height: "100%" }}
-                bodyStyle={{ padding: "16px" }}
-              >
-                <Row align="middle" gutter={8}>
-                  <Col>
-                    <DatabaseOutlined style={{ fontSize: "24px", color: "#3B82F6" }} />
-                  </Col>
-                  <Col flex="auto">
-                    <Text strong style={{ display: "block", fontSize: "12px" }}>
-                      Total Materiales
-                    </Text>
-                    <Title level={3} style={{ margin: "4px 0", fontSize: "20px" }}>
-                      {totalesMateriales.totalMateriales || 0}
-                    </Title>
-                    <Text type="success" style={{ fontSize: "11px" }}>
-                      <ArrowUpOutlined /> Materiales en sistema
-                    </Text>
-                  </Col>
-                </Row>
-              </Card>
+        <Content style={{ margin: isMobile ? "10px" : "20px", padding: 0 }}>
+          {/* Stats: 2x2x2 en móvil → 3x2 en tablet → 6x1 en desktop */}
+          <Row gutter={[isMobile ? 8 : 16, isMobile ? 8 : 16]}>
+            <Col xs={12} sm={8} md={8} lg={4}>
+              <StatCard
+                icon={<DatabaseOutlined />}
+                color="#3B82F6"
+                label="Total Materiales"
+                value={totalesMateriales.totalMateriales || 0}
+                extra={
+                  <>
+                    <ArrowUpOutlined /> Materiales en sistema
+                  </>
+                }
+              />
             </Col>
-
-            {/* Stock Total */}
-            <Col xs={24} sm={12} md={8} lg={4}>
-              <Card 
-                size="small"
-                style={{ height: "100%" }}
-                bodyStyle={{ padding: "16px" }}
-              >
-                <Row align="middle" gutter={8}>
-                  <Col>
-                    <BarChartOutlined style={{ fontSize: "24px", color: "#10B981" }} />
-                  </Col>
-                  <Col flex="auto">
-                    <Text strong style={{ display: "block", fontSize: "12px" }}>
-                      Stock Total
-                    </Text>
-                    <Title level={3} style={{ margin: "4px 0", fontSize: "20px" }}>
-                      {parseFloat(totalesMateriales.stockTotal || 0).toLocaleString()}
-                    </Title>
-                    <Text type="secondary" style={{ fontSize: "11px" }}>
-                      {parseFloat(totalesMateriales.totalReservado || 0).toLocaleString()} reservados
-                    </Text>
-                  </Col>
-                </Row>
-              </Card>
+            <Col xs={12} sm={8} md={8} lg={4}>
+              <StatCard
+                icon={<BarChartOutlined />}
+                color="#10B981"
+                label="Stock Total"
+                value={parseFloat(
+                  totalesMateriales.stockTotal || 0
+                ).toLocaleString()}
+                extra={`${parseFloat(
+                  totalesMateriales.totalReservado || 0
+                ).toLocaleString()} reservados`}
+              />
             </Col>
-
-            {/* Alertas Activas */}
-            <Col xs={24} sm={12} md={8} lg={4}>
-              <Card 
-                size="small"
-                style={{ height: "100%" }}
-                bodyStyle={{ padding: "16px" }}
-              >
-                <Row align="middle" gutter={8}>
-                  <Col>
-                    <ExclamationCircleOutlined style={{ fontSize: "24px", color: "#EF4444" }} />
-                  </Col>
-                  <Col flex="auto">
-                    <Text strong style={{ display: "block", fontSize: "12px" }}>
-                      Alertas Activas
-                    </Text>
-                    <Title level={3} style={{ margin: "4px 0", fontSize: "20px", color: "#EF4444" }}>
-                      {alertas.alertasActivas || 0}
-                    </Title>
-                    <Text type="danger" style={{ fontSize: "11px" }}>
-                      ⚠️ Stock bajo mínimo
-                    </Text>
-                  </Col>
-                </Row>
-              </Card>
+            <Col xs={12} sm={8} md={8} lg={4}>
+              <StatCard
+                icon={<ExclamationCircleOutlined />}
+                color="#EF4444"
+                label="Alertas Activas"
+                value={alertas.alertasActivas || 0}
+                extra="⚠️ Stock bajo mínimo"
+              />
             </Col>
-
-            {/* Entradas por Aprobar */}
-            <Col xs={24} sm={12} md={8} lg={4}>
-              <Card 
-                size="small"
-                style={{ height: "100%" }}
-                bodyStyle={{ padding: "16px" }}
-              >
-                <Row align="middle" gutter={8}>
-                  <Col>
-                    <ClockCircleOutlined style={{ fontSize: "24px", color: "#F59E0B" }} />
-                  </Col>
-                  <Col flex="auto">
-                    <Text strong style={{ display: "block", fontSize: "12px" }}>
-                      Entradas por Aprobar
-                    </Text>
-                    <Title level={3} style={{ margin: "4px 0", fontSize: "20px", color: "#F59E0B" }}>
-                      {aprobacionesPendientes.entradasPorAprobar || 0}
-                    </Title>
-                    <Text type="warning" style={{ fontSize: "11px" }}>
-                      ⏳ Esperando revisión
-                    </Text>
-                  </Col>
-                </Row>
-              </Card>
+            <Col xs={12} sm={12} md={8} lg={4}>
+              <StatCard
+                icon={<ClockCircleOutlined />}
+                color="#F59E0B"
+                label="Entradas por Aprobar"
+                value={aprobacionesPendientes.entradasPorAprobar || 0}
+                extra="⏳ Esperando revisión"
+              />
             </Col>
-
-            {/* Salidas por Aprobar */}
-            <Col xs={24} sm={12} md={8} lg={4}>
-              <Card 
-                size="small"
-                style={{ height: "100%" }}
-                bodyStyle={{ padding: "16px" }}
-              >
-                <Row align="middle" gutter={8}>
-                  <Col>
-                    <CheckCircleOutlined style={{ fontSize: "24px", color: "#8B5CF6" }} />
-                  </Col>
-                  <Col flex="auto">
-                    <Text strong style={{ display: "block", fontSize: "12px" }}>
-                      Salidas por Aprobar
-                    </Text>
-                    <Title level={3} style={{ margin: "4px 0", fontSize: "20px", color: "#8B5CF6" }}>
-                      {aprobacionesPendientes.salidasPorAprobar || 0}
-                    </Title>
-                    <Text type="secondary" style={{ fontSize: "11px" }}>
-                      📋 Pendientes de autorización
-                    </Text>
-                  </Col>
-                </Row>
-              </Card>
+            <Col xs={12} sm={12} md={8} lg={4}>
+              <StatCard
+                icon={<CheckCircleOutlined />}
+                color="#8B5CF6"
+                label="Salidas por Aprobar"
+                value={aprobacionesPendientes.salidasPorAprobar || 0}
+                extra="📋 Pendientes"
+              />
             </Col>
-
-            {/* Movimientos Hoy */}
-            <Col xs={24} sm={12} md={8} lg={4}>
-              <Card 
-                size="small"
-                style={{ height: "100%" }}
-                bodyStyle={{ padding: "16px" }}
-              >
-                <Row align="middle" gutter={8}>
-                  <Col>
-                    <AppstoreOutlined style={{ fontSize: "24px", color: "#06B6D4" }} />
-                  </Col>
-                  <Col flex="auto">
-                    <Text strong style={{ display: "block", fontSize: "12px" }}>
-                      Movimientos Hoy
-                    </Text>
-                    <Title level={3} style={{ margin: "4px 0", fontSize: "20px" }}>
-                      {movimientosHoy.totalHoy || 0}
-                    </Title>
-                    <Text type="secondary" style={{ fontSize: "11px" }}>
-                      ↑ {movimientosHoy.entradasHoy || 0} entradas, {movimientosHoy.salidasHoy || 0} salidas
-                    </Text>
-                  </Col>
-                </Row>
-              </Card>
+            <Col xs={12} sm={12} md={8} lg={4}>
+              <StatCard
+                icon={<AppstoreOutlined />}
+                color="#06B6D4"
+                label="Movimientos Hoy"
+                value={movimientosHoy.totalHoy || 0}
+                extra={`↑ ${movimientosHoy.entradasHoy || 0} ent, ${
+                  movimientosHoy.salidasHoy || 0
+                } sal`}
+              />
             </Col>
           </Row>
 
-          {/* Gráficos y Tablas */}
-          <Row gutter={[16, 16]} style={{ marginTop: 20 }}>
-            {/* Gráfico de Movimientos Semanales */}
+          <Row gutter={[isMobile ? 12 : 16, isMobile ? 12 : 16]} style={{ marginTop: isMobile ? 12 : 20 }}>
+            {/* Gráfico de movimientos */}
             <Col xs={24} lg={12}>
-              <Card 
-                title="Movimientos de la Semana" 
+              <Card
+                title="Movimientos de la Semana"
                 size="small"
-                style={{ height: "400px" }}
+                style={{ height: isMobile ? "auto" : "400px" }}
               >
                 {datosMovimientosSemanales.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
+                  <ResponsiveContainer width="100%" height={isMobile ? 240 : 300}>
                     <BarChart
                       data={datosMovimientosSemanales}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                      margin={{
+                        top: 20,
+                        right: 10,
+                        left: isMobile ? -25 : -20,
+                        bottom: 5,
+                      }}
                     >
-                      <XAxis 
-                        dataKey="name" 
-                        tick={{ fontSize: 11 }}
+                      {/* 📱 En móvil: sin rotación, abreviado a 3 letras, altura chica */}
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fontSize: isMobile ? 10 : 10 }}
                         interval={0}
-                        angle={-45}
-                        textAnchor="end"
-                        height={60}
+                        angle={isMobile ? 0 : -45}
+                        textAnchor={isMobile ? "middle" : "end"}
+                        height={isMobile ? 30 : 60}
+                        tickFormatter={(val) =>
+                          isMobile ? String(val).slice(0, 3) : val
+                        }
                       />
-                      <YAxis 
-                        tick={{ fontSize: 11 }}
-                      />
-                      <Tooltip 
-                        formatter={(value, name) => [`${value} movimientos`, name]}
-                        labelFormatter={(label, payload) => {
-                          if (payload && payload[0]) {
-                            return `Día: ${label}`;
-                          }
-                          return label;
-                        }}
-                      />
-                      <Legend />
-                      <Bar 
-                        dataKey="Entradas" 
-                        fill="#10B981" 
+                      <YAxis tick={{ fontSize: 10 }} />
+                      <Tooltip formatter={(value, name) => [`${value} mov.`, name]} />
+                      <Legend wrapperStyle={{ fontSize: isMobile ? 11 : 12 }} />
+                      <Bar
+                        dataKey="Entradas"
+                        fill="#10B981"
                         name="Entradas"
                         radius={[4, 4, 0, 0]}
                       />
-                      <Bar 
-                        dataKey="Salidas" 
-                        fill="#EF4444" 
+                      <Bar
+                        dataKey="Salidas"
+                        fill="#EF4444"
                         name="Salidas"
                         radius={[4, 4, 0, 0]}
                       />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div style={{ 
-                    height: 300, 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    color: '#999'
-                  }}>
-                    No hay datos de movimientos esta semana
+                  <div
+                    style={{
+                      height: isMobile ? 240 : 300,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#999",
+                    }}
+                  >
+                    No hay datos de movimientos
                   </div>
                 )}
               </Card>
             </Col>
 
-            {/* Tabla de Stock por Categoría */}
+            {/* Distribución de stock: cards en móvil / tabla en desktop */}
             <Col xs={24} lg={12}>
-              <Card 
-                title="Distribución de Stock por Categoría" 
+              <Card
+                title="Distribución de Stock"
                 size="small"
-                style={{ height: "400px", overflow: 'auto' }}
+                style={{ height: isMobile ? "auto" : "400px" }}
               >
                 {datosStockTabla.length > 0 ? (
-                  <Table 
-                    dataSource={datosStockTabla}
-                    columns={columnasStock}
-                    pagination={false}
-                    size="small"
-                    scroll={{ y: 240 }}
-                    summary={() => (
-                      <Table.Summary>
-                        <Table.Summary.Row style={{ background: '#fafafa' }}>
-                          <Table.Summary.Cell index={0}>
-                            <Text strong>Total</Text>
-                          </Table.Summary.Cell>
-                          <Table.Summary.Cell index={1}>
-                            <Text strong>
-                              {datosStockTabla.reduce((sum, item) => sum + item.cantidad, 0).toLocaleString()} unidades
-                            </Text>
-                          </Table.Summary.Cell>
-                          <Table.Summary.Cell index={2}>
-                            <Text strong>100%</Text>
-                          </Table.Summary.Cell>
-                          <Table.Summary.Cell index={3} />
-                        </Table.Summary.Row>
-                      </Table.Summary>
-                    )}
-                  />
+                  isMobile ? (
+                    renderStockMobile()
+                  ) : (
+                    <Table
+                      dataSource={datosStockTabla}
+                      columns={columnasStock}
+                      pagination={false}
+                      size="small"
+                      scroll={{ x: 500, y: 240 }}
+                      summary={() => (
+                        <Table.Summary>
+                          <Table.Summary.Row style={{ background: "#fafafa" }}>
+                            <Table.Summary.Cell index={0}>
+                              <Text strong>Total</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={1}>
+                              <Text strong>
+                                {totalCantidad.toLocaleString()} uds
+                              </Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={2}>
+                              <Text strong>100%</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={3} />
+                          </Table.Summary.Row>
+                        </Table.Summary>
+                      )}
+                    />
+                  )
                 ) : (
-                  <div style={{ 
-                    height: 300, 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    color: '#999'
-                  }}>
-                    No hay datos de stock por categoría
+                  <div
+                    style={{
+                      height: isMobile ? 220 : 300,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#999",
+                    }}
+                  >
+                    No hay datos de stock
                   </div>
                 )}
               </Card>
             </Col>
           </Row>
 
-          {/* Información adicional si no hay datos */}
           {(!dashboardData || Object.keys(dashboardData).length === 0) && (
             <Row style={{ marginTop: 20 }}>
               <Col span={24}>
                 <Alert
                   message="No hay datos disponibles"
-                  description="El dashboard no ha recibido información del servidor. Verifica que el procedimiento almacenado esté funcionando correctamente."
+                  description="El dashboard no ha recibido información del servidor."
                   type="info"
                   showIcon
                 />

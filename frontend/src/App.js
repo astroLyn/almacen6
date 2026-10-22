@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Layout, Spin } from "antd";
+import { Layout, Spin, Grid } from "antd";
 import { BrowserRouter as Router, Routes, Route, useNavigate, Navigate, useLocation } from "react-router-dom";
 import LayoutSidebar from "./components/LayoutSidebar.jsx";
 import { AuthProvider, useAuth } from "./context/AuthContext.jsx";
@@ -18,9 +18,10 @@ import PerfilUsuario from "./pages/perfilUsuario";
 import "antd/dist/reset.css";
 
 const { Content } = Layout;
+const { useBreakpoint } = Grid;
 
 // ==========================================
-// 🛠️ COMPONENTES HELPER (Deben ir primero)
+// 🛠️ COMPONENTES HELPER
 // ==========================================
 const LoadingSpinner = () => (
   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -29,36 +30,26 @@ const LoadingSpinner = () => (
 );
 
 // ==========================================
-// 🛡️ GUARDIANES DE RUTAS (MIDDLEWARES)
+// 🛡️ GUARDIANES DE RUTAS
 // ==========================================
-
-// 1. Candado Básico: ¿Está logueado?
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
-  
   if (loading) return <LoadingSpinner />;
   return isAuthenticated ? children : <Navigate to="/login" replace />;
 };
 
-// 2. Candado Inverso: ¿Ya está logueado?
 const PublicRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
-  
   if (loading) return <LoadingSpinner />;
   return !isAuthenticated ? children : <Navigate to="/" replace />;
 };
 
-// 3. 🔒 Candado Estricto: ¿Tiene el Rol correcto?
 const RoleRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
-  
   if (loading) return <LoadingSpinner />;
-
-  // Si no hay usuario o el rol no está autorizado, redireccionamos al Dashboard
   if (!user || !allowedRoles.includes(user.acceso)) {
     return <Navigate to="/" replace />;
   }
-  
   return children;
 };
 
@@ -71,6 +62,10 @@ const MainLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+
   React.useEffect(() => {
     const pathToKeyMap = {
       '/': 'dashboard',
@@ -122,17 +117,21 @@ const MainLayout = () => {
         collapsed={collapsed}
         setCollapsed={setCollapsed}
       />
-      <Layout style={{ marginLeft: collapsed ? 80 : 250, background: "#f5f5f5", transition: "all 0.2s" }}>
-        <Content style={{ padding: 24 }}>
+      
+      <Layout style={{ 
+        marginLeft: isMobile ? 0 : (collapsed ? 80 : 250), 
+        background: "#f5f5f5", 
+        transition: "all 0.2s" 
+      }}>
+
+        <Content style={{ padding: isMobile ? "56px 0 0 0" : 24 }}>
           <Routes>
-            {/* 🟢 RUTAS PÚBLICAS INTERNAS (Todos los roles acceden) */}
             <Route path="/" element={<Dashboard />} />
             <Route path="/inventario" element={<Inventario />} />
             <Route path="/alertas" element={<Alertas />} />
             <Route path="/historial" element={<Historial />} />
             <Route path="/perfilUsuario" element={<PerfilUsuario />} />
             
-            {/* 🟡 RUTAS OPERATIVAS (Solo Encargadas y Empleados, bloqueadas para 'CON') */}
             <Route path="/entrada" element={
               <RoleRoute allowedRoles={['ENC', 'EMP']}>
                 <Entrada />
@@ -154,7 +153,6 @@ const MainLayout = () => {
               </RoleRoute>
             } />
 
-            {/* 🔴 RUTAS ADMINISTRATIVAS (Solo Encargadas 'ENC') */}
             <Route path="/configuracion" element={
               <RoleRoute allowedRoles={['ENC']}>
                 <Configuracion />
