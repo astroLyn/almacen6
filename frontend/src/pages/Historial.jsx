@@ -16,6 +16,7 @@ import {
   Modal,
   Grid,
   Empty,
+  Pagination, // 🌟 1. Importamos Pagination
 } from "antd";
 import {
   ReloadOutlined,
@@ -37,6 +38,13 @@ const HistorialMovimientos = () => {
   const screens = useBreakpoint();
   const isMobile = !screens.md; // < 768px
 
+  // 🌟 2. Estados para la paginación móvil (Principal y Modal)
+  const [pageMovimientos, setPageMovimientos] = useState(1);
+  const [pageSizeMovimientos] = useState(10); // Mismo tamaño que en la tabla desktop
+
+  const [pageDetalles, setPageDetalles] = useState(1);
+  const [pageSizeDetalles] = useState(5);
+
   const [movimientos, setMovimientos] = useState([]);
   const [filtroTipo, setFiltroTipo] = useState("Todos");
   const [busqueda, setBusqueda] = useState("");
@@ -57,6 +65,11 @@ const HistorialMovimientos = () => {
     obtenerResumen();
     obtenerMovimientos();
   }, []);
+
+  // 🌟 3. Reiniciar página de movimientos al aplicar filtros
+  useEffect(() => {
+    setPageMovimientos(1);
+  }, [filtroTipo, busqueda, rangoFechas]);
 
   const obtenerResumen = async () => {
     try {
@@ -101,6 +114,7 @@ const HistorialMovimientos = () => {
     setMovimientoSeleccionado(record);
     setIsModalVisible(true);
     setLoadingDetalles(true);
+    setPageDetalles(1); // 🌟 4. Reiniciar paginación del modal al abrir
 
     try {
       const idNumber = String(record.idReferencia).replace(/\D/g, "");
@@ -229,6 +243,15 @@ const HistorialMovimientos = () => {
     if (modulo === "Usuarios" || modulo === "Login") return "blue";
     return "default";
   };
+
+  // 🌟 5. Cálculos de paginación
+  const indexOfLastMov = pageMovimientos * pageSizeMovimientos;
+  const indexOfFirstMov = indexOfLastMov - pageSizeMovimientos;
+  const currentMovimientos = movimientos.slice(indexOfFirstMov, indexOfLastMov);
+
+  const indexOfLastDetalle = pageDetalles * pageSizeDetalles;
+  const indexOfFirstDetalle = indexOfLastDetalle - pageSizeDetalles;
+  const currentDetalles = detalleMateriales.slice(indexOfFirstDetalle, indexOfLastDetalle);
 
   // 🎴 Card móvil de un movimiento
   const renderMovimientoCard = (record, index) => {
@@ -605,7 +628,20 @@ const HistorialMovimientos = () => {
             <Empty description="Sin movimientos" />
           ) : (
             <div>
-              {movimientos.map((m, i) => renderMovimientoCard(m, i))}
+              {/* 🌟 6. Usamos currentMovimientos y agregamos Pagination */}
+              {currentMovimientos.map((m, i) => renderMovimientoCard(m, i))}
+              
+              {movimientos.length > pageSizeMovimientos && (
+                <Pagination
+                  current={pageMovimientos}
+                  pageSize={pageSizeMovimientos}
+                  total={movimientos.length}
+                  onChange={setPageMovimientos}
+                  size="small"
+                  showSizeChanger={false}
+                  style={{ textAlign: "center", marginTop: 12, marginBottom: 12 }}
+                />
+              )}
             </div>
           )
         ) : (
@@ -672,7 +708,21 @@ const HistorialMovimientos = () => {
               >
                 {detalleMateriales.length} material(es):
               </div>
-              {detalleMateriales.map(renderDetalleCard)}
+              
+              {/* 🌟 7. Usamos currentDetalles y agregamos Pagination al modal */}
+              {currentDetalles.map(renderDetalleCard)}
+              
+              {detalleMateriales.length > pageSizeDetalles && (
+                <Pagination
+                  current={pageDetalles}
+                  pageSize={pageSizeDetalles}
+                  total={detalleMateriales.length}
+                  onChange={setPageDetalles}
+                  size="small"
+                  showSizeChanger={false}
+                  style={{ textAlign: "center", marginTop: 12, marginBottom: 4 }}
+                />
+              )}
             </div>
           )
         ) : (

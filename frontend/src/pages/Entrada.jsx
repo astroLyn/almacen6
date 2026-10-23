@@ -25,6 +25,7 @@ import {
   Grid,
   Empty,
   Collapse,
+  Pagination, // 🌟 1. Importamos Pagination
 } from "antd";
 import {
   PlusOutlined,
@@ -47,6 +48,16 @@ export default function EntradaMaterial() {
   const { user } = useAuth();
   const screens = useBreakpoint();
   const isMobile = !screens.md; // < 768px
+
+  // 🌟 2. Estados para la paginación móvil
+  const [pageBusqueda, setPageBusqueda] = useState(1);
+  const [pageSizeBusqueda] = useState(5); // 5 tarjetas por página
+
+  const [pageIngreso, setPageIngreso] = useState(1);
+  const [pageSizeIngreso] = useState(5);
+
+  const [pagePendientes, setPagePendientes] = useState(1);
+  const [pageSizePendientes] = useState(5);
 
   const [materiales, setMateriales] = useState([]);
   const [materialSeleccionado, setMaterialSeleccionado] = useState(null);
@@ -86,6 +97,11 @@ export default function EntradaMaterial() {
   const [nuevoProveedor, setNuevoProveedor] = useState("");
   const [cargandoClientes, setCargandoClientes] = useState(false);
   const [cargandoProveedores, setCargandoProveedores] = useState(false);
+
+  // 🌟 3. Reiniciar paginación cuando cambian los filtros de búsqueda
+  useEffect(() => {
+    setPageBusqueda(1);
+  }, [textoBusqueda, filtroUbicacion, filtroMarca]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -289,6 +305,10 @@ export default function EntradaMaterial() {
   const eliminarMaterial = (codigo) => {
     setMateriales(materiales.filter((m) => m.codigoMaterial !== codigo));
     message.success("Material removido de la lista");
+    // Ajustar página si se queda vacía
+    if (materiales.length - 1 <= (pageIngreso - 1) * pageSizeIngreso) {
+      setPageIngreso(Math.max(1, pageIngreso - 1));
+    }
   };
 
   const confirmarRegistro = () => {
@@ -356,6 +376,7 @@ export default function EntradaMaterial() {
     setTextoBusqueda("");
     setFiltroUbicacion(null);
     setFiltroMarca(null);
+    setPageIngreso(1); // Resetear página
   };
 
   const columnasBusqueda = [
@@ -536,6 +557,19 @@ export default function EntradaMaterial() {
     },
   ];
 
+  // 🌟 4. Cálculo de los items paginados
+  const indexOfLastBusqueda = pageBusqueda * pageSizeBusqueda;
+  const indexOfFirstBusqueda = indexOfLastBusqueda - pageSizeBusqueda;
+  const currentOpciones = opcionesMateriales.slice(indexOfFirstBusqueda, indexOfLastBusqueda);
+
+  const indexOfLastIngreso = pageIngreso * pageSizeIngreso;
+  const indexOfFirstIngreso = indexOfLastIngreso - pageSizeIngreso;
+  const currentMateriales = materiales.slice(indexOfFirstIngreso, indexOfLastIngreso);
+
+  const indexOfLastPendientes = pagePendientes * pageSizePendientes;
+  const indexOfFirstPendientes = indexOfLastPendientes - pageSizePendientes;
+  const currentPendientes = entradasPendientes.slice(indexOfFirstPendientes, indexOfLastPendientes);
+
   // 🎴 Card móvil de resultado de búsqueda
   const renderMaterialBusquedaCard = (record) => (
     <Card
@@ -630,7 +664,7 @@ export default function EntradaMaterial() {
     );
   };
 
-  // 🎴 Card móvil de entrada pendiente (con Collapse para detalles)
+  // 🎴 Card móvil de entrada pendiente
   const renderPendingEntryCard = (e) => {
     const provNombre = (() => {
       const p = proveedores.find((pp) => pp.codigo === e.proveedorId);
@@ -1033,7 +1067,21 @@ export default function EntradaMaterial() {
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
                   />
                 ) : (
-                  <div>{opcionesMateriales.map(renderMaterialBusquedaCard)}</div>
+                  <div>
+                    {/* 🌟 5. Usamos currentOpciones y agregamos Pagination */}
+                    {currentOpciones.map(renderMaterialBusquedaCard)}
+                    {opcionesMateriales.length > pageSizeBusqueda && (
+                      <Pagination
+                        current={pageBusqueda}
+                        pageSize={pageSizeBusqueda}
+                        total={opcionesMateriales.length}
+                        onChange={setPageBusqueda}
+                        size="small"
+                        showSizeChanger={false}
+                        style={{ textAlign: "center", marginTop: 12, marginBottom: 12 }}
+                      />
+                    )}
+                  </div>
                 )
               ) : (
                 <Table
@@ -1210,7 +1258,21 @@ export default function EntradaMaterial() {
 
               {materiales.length > 0 ? (
                 isMobile ? (
-                  <div>{materiales.map(renderMaterialIngresoCard)}</div>
+                  <div>
+                    {/* 🌟 6. Usamos currentMateriales y agregamos Pagination */}
+                    {currentMateriales.map(renderMaterialIngresoCard)}
+                    {materiales.length > pageSizeIngreso && (
+                      <Pagination
+                        current={pageIngreso}
+                        pageSize={pageSizeIngreso}
+                        total={materiales.length}
+                        onChange={setPageIngreso}
+                        size="small"
+                        showSizeChanger={false}
+                        style={{ textAlign: "center", marginTop: 12 }}
+                      />
+                    )}
+                  </div>
                 ) : (
                   <Table
                     dataSource={materiales}
@@ -1292,7 +1354,19 @@ export default function EntradaMaterial() {
             />
           ) : (
             <div>
-              {entradasPendientes.map(renderPendingEntryCard)}
+              {/* 🌟 7. Usamos currentPendientes y agregamos Pagination */}
+              {currentPendientes.map(renderPendingEntryCard)}
+              {entradasPendientes.length > pageSizePendientes && (
+                <Pagination
+                  current={pagePendientes}
+                  pageSize={pageSizePendientes}
+                  total={entradasPendientes.length}
+                  onChange={setPagePendientes}
+                  size="small"
+                  showSizeChanger={false}
+                  style={{ textAlign: "center", marginTop: 12, marginBottom: 12 }}
+                />
+              )}
             </div>
           )
         ) : (

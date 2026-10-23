@@ -15,6 +15,7 @@ import {
   Grid,
   Empty,
   Space,
+  Pagination, // 🌟 1. Importamos Pagination
 } from "antd";
 import {
   AppstoreOutlined,
@@ -32,6 +33,10 @@ const { useBreakpoint } = Grid;
 const Inventario = () => {
   const screens = useBreakpoint();
   const isMobile = !screens.md; // < 768px
+
+  // 🌟 2. Estados para la paginación móvil
+  const [pageInventario, setPageInventario] = useState(1);
+  const [pageSizeInventario] = useState(5); // Mostramos 5 tarjetas por página
 
   const [data, setData] = useState([]);
   const [categorias, setCategorias] = useState([]);
@@ -53,6 +58,11 @@ const Inventario = () => {
   const [stockDisponible, setStockDisponible] = useState(0);
 
   const [textoBusqueda, setTextoBusqueda] = useState("");
+
+  // 🌟 3. Reiniciar la paginación cuando cambian los filtros
+  useEffect(() => {
+    setPageInventario(1);
+  }, [filtros]);
 
   const fetchMateriales = async () => {
     setLoading(true);
@@ -204,7 +214,7 @@ const Inventario = () => {
     },
   ];
 
-  // 🎴 Card móvil tappable (toda la card abre el modal)
+  // 🎴 Card móvil tappable
   const renderMaterialCard = (record) => (
     <div
       key={record.codigoMaterial}
@@ -225,12 +235,9 @@ const Inventario = () => {
         transition: "background 0.2s, box-shadow 0.2s",
         WebkitTapHighlightColor: "transparent",
       }}
-      onTouchStart={(e) =>
-        (e.currentTarget.style.background = "#fafafa")
-      }
+      onTouchStart={(e) => (e.currentTarget.style.background = "#fafafa")}
       onTouchEnd={(e) => (e.currentTarget.style.background = "#fff")}
     >
-      {/* Header: código + estado + chevron */}
       <div
         style={{
           display: "flex",
@@ -262,7 +269,6 @@ const Inventario = () => {
         <RightOutlined style={{ fontSize: 11, color: "#bfbfbf" }} />
       </div>
 
-      {/* Descripción */}
       <div
         style={{
           fontSize: 14,
@@ -278,7 +284,6 @@ const Inventario = () => {
         {record.descripcion}
       </div>
 
-      {/* Tags: ubicación + categoría + marca */}
       <div
         style={{
           display: "flex",
@@ -310,7 +315,6 @@ const Inventario = () => {
         )}
       </div>
 
-      {/* Stock actual / mínimo en 2 columnas */}
       <Row gutter={8}>
         <Col span={12}>
           <div style={{ fontSize: 10, color: "#888", marginBottom: 2 }}>
@@ -341,7 +345,6 @@ const Inventario = () => {
     </div>
   );
 
-  // 🔢 Mini stat card para móvil (compacta)
   const MiniStatCard = ({ icon, color, label, value }) => (
     <Card
       bordered={false}
@@ -389,6 +392,11 @@ const Inventario = () => {
   );
 
   const totalActivos = data.filter((m) => m.estado === "ACT").length;
+
+  // 🌟 4. Cálculo de los elementos paginados
+  const indexOfLastItem = pageInventario * pageSizeInventario;
+  const indexOfFirstItem = indexOfLastItem - pageSizeInventario;
+  const currentItems = data.slice(indexOfFirstItem, indexOfLastItem);
 
   return (
     <div
@@ -575,7 +583,23 @@ const Inventario = () => {
             >
               {data.length} material(es) · Toca uno para ver detalles
             </div>
-            {data.map(renderMaterialCard)}
+            
+            {/* 🌟 5. Usamos currentItems en lugar de data.map */}
+            {currentItems.map(renderMaterialCard)}
+            
+            {/* 🌟 6. Agregamos el componente Pagination */}
+            {data.length > pageSizeInventario && (
+              <Pagination
+                current={pageInventario}
+                pageSize={pageSizeInventario}
+                total={data.length}
+                onChange={setPageInventario}
+                size="small"
+                showSizeChanger={false}
+                style={{ textAlign: "center", marginTop: 12, marginBottom: 12 }}
+              />
+            )}
+            
           </div>
         )
       ) : (

@@ -25,6 +25,7 @@ import {
   Grid,
   Empty,
   Collapse,
+  Pagination, // 🌟 1. Importamos Pagination
 } from "antd";
 import {
   PlusOutlined,
@@ -48,6 +49,16 @@ export default function SalidaMaterial() {
   const screens = useBreakpoint();
   const isMobile = !screens.md; // < 768px
 
+  // 🌟 2. Estados para la paginación móvil
+  const [pageBusqueda, setPageBusqueda] = useState(1);
+  const [pageSizeBusqueda] = useState(5);
+
+  const [pageSalida, setPageSalida] = useState(1);
+  const [pageSizeSalida] = useState(5);
+
+  const [pagePendientes, setPagePendientes] = useState(1);
+  const [pageSizePendientes] = useState(5);
+
   const [materiales, setMateriales] = useState([]);
   const [materialSeleccionado, setMaterialSeleccionado] = useState(null);
   const [cantidad, setCantidad] = useState("");
@@ -56,8 +67,7 @@ export default function SalidaMaterial() {
   const [salidasPendientes, setSalidasPendientes] = useState([]);
   const [loadingSalidas, setLoadingSalidas] = useState(false);
   const [alertarSalida, setAlertarSalida] = useState(false);
-  const [modalConfirmacionVisible, setModalConfirmacionVisible] =
-    useState(false);
+  const [modalConfirmacionVisible, setModalConfirmacionVisible] = useState(false);
 
   const [textoBusqueda, setTextoBusqueda] = useState("");
   const [opcionesMateriales, setOpcionesMateriales] = useState([]);
@@ -83,6 +93,11 @@ export default function SalidaMaterial() {
   const [clientes, setClientes] = useState([]);
   const [nuevoCliente, setNuevoCliente] = useState("");
   const [cargandoClientes, setCargandoClientes] = useState(false);
+
+  // 🌟 3. Reiniciar paginación al cambiar filtros
+  useEffect(() => {
+    setPageBusqueda(1);
+  }, [textoBusqueda, filtroUbicacion, filtroMarca]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -277,6 +292,11 @@ export default function SalidaMaterial() {
   const eliminarMaterial = (codigo) => {
     setMateriales(materiales.filter((m) => m.codigoMaterial !== codigo));
     message.success("Material removido de la lista");
+    
+    // 🌟 4. Si al eliminar la página actual se queda vacía, retrocedemos una página
+    if (materiales.length - 1 <= (pageSalida - 1) * pageSizeSalida) {
+      setPageSalida(Math.max(1, pageSalida - 1));
+    }
   };
 
   const confirmarRegistro = () => {
@@ -345,6 +365,7 @@ export default function SalidaMaterial() {
     setTextoBusqueda("");
     setFiltroUbicacion(null);
     setFiltroMarca(null);
+    setPageSalida(1); // 🌟 5. Reiniciar la página de la lista de materiales
   };
 
   const columnasBusqueda = [
@@ -533,6 +554,19 @@ export default function SalidaMaterial() {
     },
   ];
 
+  // 🌟 6. Cálculo de items paginados
+  const indexOfLastBusqueda = pageBusqueda * pageSizeBusqueda;
+  const indexOfFirstBusqueda = indexOfLastBusqueda - pageSizeBusqueda;
+  const currentOpciones = opcionesMateriales.slice(indexOfFirstBusqueda, indexOfLastBusqueda);
+
+  const indexOfLastSalida = pageSalida * pageSizeSalida;
+  const indexOfFirstSalida = indexOfLastSalida - pageSizeSalida;
+  const currentMateriales = materiales.slice(indexOfFirstSalida, indexOfLastSalida);
+
+  const indexOfLastPendientes = pagePendientes * pageSizePendientes;
+  const indexOfFirstPendientes = indexOfLastPendientes - pageSizePendientes;
+  const currentPendientes = salidasPendientes.slice(indexOfFirstPendientes, indexOfLastPendientes);
+
   // 🎴 Card móvil de resultado de búsqueda
   const renderMaterialBusquedaCard = (record) => (
     <Card
@@ -632,7 +666,7 @@ export default function SalidaMaterial() {
     );
   };
 
-  // 🎴 Card móvil de salida pendiente (con Collapse para detalles)
+  // 🎴 Card móvil de salida pendiente
   const renderPendingSalidaCard = (s) => {
     const clienteNombre = (() => {
       if (!s.cliente) return "-";
@@ -1001,7 +1035,19 @@ export default function SalidaMaterial() {
                   />
                 ) : (
                   <div>
-                    {opcionesMateriales.map(renderMaterialBusquedaCard)}
+                    {/* 🌟 7. Aplicamos paginación a los resultados de búsqueda */}
+                    {currentOpciones.map(renderMaterialBusquedaCard)}
+                    {opcionesMateriales.length > pageSizeBusqueda && (
+                      <Pagination
+                        current={pageBusqueda}
+                        pageSize={pageSizeBusqueda}
+                        total={opcionesMateriales.length}
+                        onChange={setPageBusqueda}
+                        size="small"
+                        showSizeChanger={false}
+                        style={{ textAlign: "center", marginTop: 12, marginBottom: 12 }}
+                      />
+                    )}
                   </div>
                 )
               ) : (
@@ -1185,7 +1231,21 @@ export default function SalidaMaterial() {
 
               {materiales.length > 0 ? (
                 isMobile ? (
-                  <div>{materiales.map(renderMaterialSalidaCard)}</div>
+                  <div>
+                    {/* 🌟 8. Aplicamos paginación a la lista de materiales a retirar */}
+                    {currentMateriales.map(renderMaterialSalidaCard)}
+                    {materiales.length > pageSizeSalida && (
+                      <Pagination
+                        current={pageSalida}
+                        pageSize={pageSizeSalida}
+                        total={materiales.length}
+                        onChange={setPageSalida}
+                        size="small"
+                        showSizeChanger={false}
+                        style={{ textAlign: "center", marginTop: 12 }}
+                      />
+                    )}
+                  </div>
                 ) : (
                   <Table
                     dataSource={materiales}
@@ -1271,7 +1331,19 @@ export default function SalidaMaterial() {
             />
           ) : (
             <div>
-              {salidasPendientes.map(renderPendingSalidaCard)}
+              {/* 🌟 9. Aplicamos paginación a las salidas pendientes */}
+              {currentPendientes.map(renderPendingSalidaCard)}
+              {salidasPendientes.length > pageSizePendientes && (
+                <Pagination
+                  current={pagePendientes}
+                  pageSize={pageSizePendientes}
+                  total={salidasPendientes.length}
+                  onChange={setPagePendientes}
+                  size="small"
+                  showSizeChanger={false}
+                  style={{ textAlign: "center", marginTop: 12, marginBottom: 12 }}
+                />
+              )}
             </div>
           )
         ) : (

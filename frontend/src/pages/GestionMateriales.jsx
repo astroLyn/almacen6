@@ -17,6 +17,7 @@ import {
   Grid,
   Empty,
   Tooltip,
+  Pagination, // 🌟 1. Importamos Pagination
 } from "antd";
 import {
   EditOutlined,
@@ -35,6 +36,10 @@ const GestionMateriales = () => {
   const { user } = useAuth();
   const screens = useBreakpoint();
   const isMobile = !screens.md; // < 768px
+
+  // 🌟 2. Estados para la paginación móvil
+  const [pageMateriales, setPageMateriales] = useState(1);
+  const [pageSizeMateriales] = useState(5);
 
   const [materiales, setMateriales] = useState([]);
   const [categorias, setCategorias] = useState([]);
@@ -126,6 +131,11 @@ const GestionMateriales = () => {
       console.error("❌ Error al obtener catálogos:", error.message);
     }
   };
+
+  // 🌟 3. Reiniciar paginación al cambiar filtros
+  useEffect(() => {
+    setPageMateriales(1);
+  }, [filtros]);
 
   useEffect(() => {
     obtenerMateriales(filtros);
@@ -427,6 +437,11 @@ const GestionMateriales = () => {
     </div>
   );
 
+  // 🌟 4. Cálculo de los elementos paginados
+  const indexOfLastItem = pageMateriales * pageSizeMateriales;
+  const indexOfFirstItem = indexOfLastItem - pageSizeMateriales;
+  const currentMateriales = materiales.slice(indexOfFirstItem, indexOfLastItem);
+
   return (
     <div
       style={{
@@ -454,7 +469,7 @@ const GestionMateriales = () => {
         Editar y eliminar materiales del inventario
       </p>
 
-      {/* FILTROS: 2 columnas en móvil, distribuciones intermedias en tablet */}
+      {/* FILTROS */}
       <Row gutter={[8, 12]} style={{ marginBottom: 16 }}>
         <Col xs={24} sm={12} lg={6}>
           <Search
@@ -560,7 +575,23 @@ const GestionMateriales = () => {
         ) : materiales.length === 0 ? (
           <Empty description="Sin materiales" />
         ) : (
-          <div>{materiales.map(renderMaterialCard)}</div>
+          <div>
+            {/* 🌟 5. Usamos currentMateriales en lugar de materiales.map */}
+            {currentMateriales.map(renderMaterialCard)}
+            
+            {/* 🌟 6. Agregamos el componente Pagination */}
+            {materiales.length > pageSizeMateriales && (
+              <Pagination
+                current={pageMateriales}
+                pageSize={pageSizeMateriales}
+                total={materiales.length}
+                onChange={setPageMateriales}
+                size="small"
+                showSizeChanger={false}
+                style={{ textAlign: "center", marginTop: 12, marginBottom: 12 }}
+              />
+            )}
+          </div>
         )
       ) : (
         <Table
